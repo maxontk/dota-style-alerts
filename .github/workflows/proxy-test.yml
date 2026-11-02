@@ -1,0 +1,41 @@
+name: Test Webshare Proxy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check proxy connection
+        env:
+          STEAM_PROXY_URL: ${{ secrets.STEAM_PROXY_URL }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          from urllib.request import build_opener, ProxyHandler
+
+          proxy = os.environ.get("STEAM_PROXY_URL", "")
+          if not proxy:
+              sys.exit("ERROR: Proxy secret is missing")
+
+          url = "https://api.ipify.org"
+
+          try:
+              direct = build_opener(ProxyHandler({}))
+              direct_ip = direct.open(url, timeout=15).read().decode().strip()
+
+              proxied = build_opener(ProxyHandler({"https": proxy}))
+              proxy_ip = proxied.open(url, timeout=20).read().decode().strip()
+
+              if direct_ip == proxy_ip:
+                  sys.exit("ERROR: Proxy did not change external IP")
+
+              print("SUCCESS: Webshare proxy is working!")
+              print("SUCCESS: External IP changed!")
+          except Exception as e:
+              print("ERROR: Proxy connection failed")
+              print("Error type:", type(e).__name__)
+              sys.exit(1)
+          PY
