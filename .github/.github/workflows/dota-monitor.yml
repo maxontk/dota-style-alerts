@@ -1,0 +1,57 @@
+name: Dota 2 style alerts
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_telegram:
+        description: 'Only send a test Telegram message'
+        type: boolean
+        default: false
+  schedule:
+    # GitHub schedules can be delayed. Offset from the top of the hour.
+    - cron: '3,13,23,33,43,53 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dota-style-watcher
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      DB_PATH: dota_alerts.sqlite3
+      MAX_PAGES: '10'
+      PAGE_DELAY: '2'
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Restore seen listings
+        if: ${{ inputs.test_telegram != true }}
+        uses: actions/cache/restore@v4
+        with:
+          path: dota_alerts.sqlite3
+          key: dota-seen-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            dota-seen-
+
+      - name: Check five items
+        if: ${{ inputs.test_telegram != true }}
+        run: python3 dota_style_alert.py --once
+
+      - name: Telegram test
+        if: ${{ inputs.test_telegram == true }}
+        run: python3 dota_style_alert.py --test-telegram
+
+      - name: Save seen listings
+        if: ${{ always() && inputs.test_telegram != true && hashFiles('dota_alerts.sqlite3') != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: dota_alerts.sqlite3
+          key: dota-seen-${{ github.run_id }}-${{ github.run_attempt }}
