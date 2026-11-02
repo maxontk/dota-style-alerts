@@ -113,6 +113,8 @@ def total_usd(listing):
 
 
 def run_once(connection, rate):
+    failures = 0
+    total_checked = 0
     for name, style, lower, upper in ITEMS:
         checked, found = 0, 0
         start = 0
@@ -122,6 +124,7 @@ def run_once(connection, rate):
                 if not rows:
                     break
                 checked += len(rows)
+                total_checked += len(rows)
                 too_expensive = False
                 for listing in rows:
                     price_rub = total_usd(listing) * rate
@@ -154,7 +157,12 @@ def run_once(connection, rate):
             logging.info("%s: scanned %d, new unlocked listings %d", name, checked, found)
         except (HTTPError, URLError, KeyError, ValueError, RuntimeError, TypeError) as e:
             logging.error("Error for %s: %s", name, e)
+            failures += 1
         time.sleep(PAGE_DELAY)
+    if failures:
+        raise RuntimeError(f"Steam checks failed for {failures}/{len(ITEMS)} items")
+    if not total_checked:
+        raise RuntimeError("Steam returned no individual listings to inspect")
 
 
 def main():
@@ -166,6 +174,15 @@ def main():
     connection.execute("CREATE TABLE IF NOT EXISTS sent (id TEXT PRIMARY KEY)")
     connection.commit()
     rate = None
+    static_rate = os.environ.get("RUB_PER_USD", "").strip()
+    if static_rate:
+        try:
+            rate = Decimal(static_rate)
+            if rate <= 0:
+                raise ValueError("must be positive")
+        except ValueError as exc:
+            raise SystemExit(f"Invalid RUB_PER_USD value: {exc}") from exc
+        logging.warning("Using configured approximate RUB_PER_USD=%s; actual Steam prices can differ", rate)
     rate_updated = 0
     if "--test-telegram" in sys.argv:
         send_message("✅ Тест Dota Style Monitor: Telegram работает!")
@@ -175,7 +192,7 @@ def main():
         send_message("✅ Мониторинг Dota 2 запущен. Проверяю 5 предметов.")
     while True:
         started = time.monotonic()
-        if rate is None or started - rate_updated > 6 * 3600:
+        if not static_rate and (rate is None or started - rate_updated > 6 * 3600):
             try:
                 rate = rub_rate()
                 rate_updated = started
@@ -183,7 +200,12 @@ def main():
             except (HTTPError, URLError, ValueError, KeyError) as e:
                 logging.error("Cannot refresh Steam RUB conversion: %s", e)
         if rate is not None:
-            run_once(connection, rate)
+            try:
+                run_once(connection, rate)
+            except RuntimeError as e:
+                logging.error("Monitor incomplete: %s", e)
+                if once:
+                    raise SystemExit(1) from e
         if once:
             connection.close()
             return
