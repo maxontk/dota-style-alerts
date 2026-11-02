@@ -28,6 +28,7 @@ jobs:
       DB_PATH: dota_alerts.sqlite3
       MAX_PAGES: '10'
       PAGE_DELAY: '2'
+      RUB_PER_USD: '80'
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
