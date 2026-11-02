@@ -26,7 +26,7 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       DB_PATH: dota_alerts.sqlite3
-      MAX_PAGES: '10'
+      MAX_PAGES: '1'
       PAGE_DELAY: '2'
       RUB_PER_USD: '80'
     steps:
