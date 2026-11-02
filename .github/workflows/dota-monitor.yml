@@ -44,6 +44,8 @@ jobs:
 
       - name: Check five items
         if: ${{ inputs.test_telegram != true }}
+        env:
+          HTTPS_PROXY: ${{ secrets.STEAM_PROXY_URL }}
         run: python3 dota_style_alert.py --once
 
       - name: Telegram test
